@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InkFlow - Modern Note App</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2A2A2A;
+            --accent-color: #2196F3;
+            --background: #f5f5f5;
+            --surface: #ffffff;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--background);
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+
+        .toolbar {
+            padding: 12px 24px;
+            background: var(--surface);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 16px;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        button {
+            padding: 8px 16px;
+            background: var(--surface);
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+            color: var(--primary-color);
+        }
+
+        button:hover {
+            background: #f8f8f8;
+            transform: translateY(-1px);
+        }
+
+        button.active {
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+        }
+
+        .material-icons {
+            font-size: 20px;
+        }
+
+        #pages {
+            margin-top: 60px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+            align-items: center;
+        }
+
+        .page-container {
+            background-color: var(--surface);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            width: 794px;
+            height: 1123px;
+            position: relative;
+            border-radius: 12px;
+            transition: transform 0.2s;
+        }
+
+        .page-container.active-page {
+            box-shadow: 0 0 0 2px var(--accent-color), 0 8px 16px rgba(0,0,0,0.1);
+            transform: scale(1.02);
+        }
+
+        input[type="range"] {
+            width: 120px;
+            accent-color: var(--accent-color);
+        }
+
+        .brush-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0,0,0,0.03);
+            padding: 8px 16px;
+            border-radius: 8px;
+        }
+
+        @media (max-width: 800px) {
+            .toolbar {
+                gap: 8px;
+                padding: 8px;
+            }
+            
+            button span:not(.material-icons) {
+                display: none;
+            }
+            
+            .page-container {
+                width: 95vw;
+                height: calc(95vw * 1.414);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <button onclick="undo()">
+            <span class="material-icons">undo</span>
+            <span>Undo</span>
+        </button>
+        <button onclick="redo()">
+            <span class="material-icons">redo</span>
+            <span>Redo</span>
+        </button>
+
+        <div class="brush-controls">
+            <button onclick="changeColor('black')" class="active">
+                <span class="material-icons">brush</span>
+                <span>Black</span>
+            </button>
+            <button onclick="changeColor('#e53935')">
+                <span class="material-icons">brush</span>
+                <span>Red</span>
+            </button>
+        </div>
+
+        <div class="brush-controls">
+            <button onclick="toggleEraser()" id="eraserBtn">
+                <span class="material-icons">ink_eraser</span>
+                <span>Eraser</span>
+            </button>
+            <input type="range" id="brushSize" min="1" max="50" value="5" onchange="changeBrushSize(this.value)">
+            <span>Size: <span id="brushSizeValue">5</span></span>
+        </div>
+
+        <div class="brush-controls">
+            <button onclick="clearCanvas()">
+                <span class="material-icons">delete_sweep</span>
+                <span>Clear</span>
+            </button>
+            <button onclick="saveAsPDF()">
+                <span class="material-icons">picture_as_pdf</span>
+                <span>PDF</span>
+            </button>
+            <button onclick="saveAsImage()">
+                <span class="material-icons">image</span>
+                <span>Export</span>
+            </button>
+        </div>
+    </div>
+
+    <div id="pages"></div>
+
+    <!-- EXACT SAME JAVASCRIPT AS BEFORE -->
+    <script>
+        window.jspdf = window.jspdf || { jsPDF: window.jspdf.jsPDF };
+        const { jsPDF } = window.jspdf;
+
+        let currentPageIndex = 0;
+        let pages = [];
+        let undoStacks = [];
+        let redoStacks = [];
+
+        function createNewPage() {
+            const pageContainer = document.createElement('div');
+            pageContainer.className = 'page-container';
+            const canvasEl = document.createElement('canvas');
+            canvasEl.width = 794;
+            canvasEl.height = 1123;
+            pageContainer.appendChild(canvasEl);
+            document.getElementById('pages').appendChild(pageContainer);
+            
+            const canvas = new fabric.Canvas(canvasEl, {
+                isDrawingMode: true,
+                backgroundColor: '#ffffff'
+            });
+
+            const pageIndex = pages.length;
+            
+            pageContainer.addEventListener('click', () => switchPage(pageIndex));
+            canvas.on('path:created', () => {
+                saveState(pageIndex);
+                checkForNewPage(pageIndex);
+            });
+
+            undoStacks[pageIndex] = [canvas.toJSON()];
+            redoStacks[pageIndex] = [];
+            
+            pages.push(canvas);
+            switchPage(pageIndex);
+        }
+
+        function switchPage(newIndex) {
+            currentPageIndex = newIndex;
+            document.querySelectorAll('.page-container').forEach((container, index) => {
+                container.classList.toggle('active-page', index === newIndex);
+            });
+        }
+
+        function checkForNewPage(pageIndex) {
+            const canvas = pages[pageIndex];
+            let maxY = 0;
+            canvas.getObjects().forEach(obj => {
+                if (obj.top + obj.height > maxY) maxY = obj.top + obj.height;
+            });
+            if (maxY > 1123 - 150) createNewPage();
+        }
+
+        function saveState(pageIndex) {
+            if (!undoStacks[pageIndex]) undoStacks[pageIndex] = [];
+            undoStacks[pageIndex].push(pages[pageIndex].toJSON());
+            redoStacks[pageIndex] = [];
+        }
+
+        function undo() {
+            if (!undoStacks[currentPageIndex] || undoStacks[currentPageIndex].length <= 1) return;
+            
+            redoStacks[currentPageIndex].push(undoStacks[currentPageIndex].pop());
+            pages[currentPageIndex].loadFromJSON(
+                undoStacks[currentPageIndex][undoStacks[currentPageIndex].length - 1],
+                () => pages[currentPageIndex].renderAll()
+            );
+        }
+
+        function redo() {
+            if (!redoStacks[currentPageIndex] || redoStacks[currentPageIndex].length === 0) return;
+            
+            undoStacks[currentPageIndex].push(redoStacks[currentPageIndex].pop());
+            pages[currentPageIndex].loadFromJSON(
+                undoStacks[currentPageIndex][undoStacks[currentPageIndex].length - 1],
+                () => pages[currentPageIndex].renderAll()
+            );
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+                e.preventDefault();
+                if (e.key === 'z') undo();
+                if (e.key === 'y') redo();
+            }
+        });
+
+        let isEraser = false;
+        function changeColor(color) {
+            isEraser = false;
+            pages[currentPageIndex].freeDrawingBrush.color = color;
+            pages[currentPageIndex].isDrawingMode = true;
+            document.getElementById('brushSizeValue').textContent = 
+                pages[currentPageIndex].freeDrawingBrush.width;
+        }
+
+        function toggleEraser() {
+            isEraser = !isEraser;
+            pages[currentPageIndex].freeDrawingBrush.color = isEraser ? 'white' : 'black';
+            pages[currentPageIndex].freeDrawingBrush.width = isEraser ? 20 : 5;
+            document.getElementById('brushSizeValue').textContent = 
+                pages[currentPageIndex].freeDrawingBrush.width;
+        }
+
+        function changeBrushSize(size) {
+            pages[currentPageIndex].freeDrawingBrush.width = parseInt(size);
+            document.getElementById('brushSizeValue').textContent = size;
+        }
+
+        function clearCanvas() {
+            pages[currentPageIndex].clear();
+            pages[currentPageIndex].backgroundColor = '#ffffff';
+            pages[currentPageIndex].renderAll();
+            saveState(currentPageIndex);
+        }
+
+        function saveAsImage() {
+            pages.forEach((page, index) => {
+                const dataURL = page.toDataURL({ format: 'png', quality: 1 });
+                const link = document.createElement('a');
+                link.download = `page-${index + 1}.png`;
+                link.href = dataURL;
+                link.click();
+            });
+        }
+
+        function saveAsPDF() {
+            const doc = new jsPDF({
+                orientation: 'portrait',
+                unit: 'mm',
+                format: 'a4'
+            });
+
+            pages.forEach((page, index) => {
+                if (index > 0) doc.addPage();
+                const imgData = page.toDataURL({ format: 'png', quality: 1 });
+                doc.addImage(imgData, 'PNG', 0, 0, 210, 297);
+            });
+
+            doc.save('notes.pdf');
+        }
+
+        // Initialize first page
+        createNewPage();
+    </script>
+</body>
+</html>
