@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>InkFlow - Modern Note App</title>
+    <title>InkFlow - Dark Mode Note App</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <style>
         :root {
-            --primary-color: #2A2A2A;
+            --primary-color: #ffffff;
             --accent-color: #2196F3;
-            --background: #f5f5f5;
-            --surface: #ffffff;
+            --background: #1a1a1a;
+            --surface: #2d2d2d;
         }
 
         body {
@@ -20,13 +20,6 @@
             padding: 0;
             background-color: var(--background);
             font-family: 'Segoe UI', system-ui, sans-serif;
-            transition: background-color 0.3s;
-        }
-
-        body.dark-mode {
-            --background: #1a1a1a;
-            --surface: #2d2d2d;
-            --primary-color: #ffffff;
         }
 
         .toolbar {
@@ -40,13 +33,12 @@
             z-index: 1000;
             flex-wrap: wrap;
             align-items: center;
-            transition: background-color 0.3s;
         }
 
         button {
             padding: 8px 16px;
             background: var(--surface);
-            border: 1px solid #ddd;
+            border: 1px solid #444;
             border-radius: 8px;
             cursor: pointer;
             display: flex;
@@ -57,7 +49,7 @@
         }
 
         button:hover {
-            background: var(--background);
+            background: #373737;
             transform: translateY(-1px);
         }
 
@@ -104,7 +96,7 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            background: rgba(0,0,0,0.03);
+            background: rgba(255,255,255,0.05);
             padding: 8px 16px;
             border-radius: 8px;
         }
@@ -116,6 +108,7 @@
             border-radius: 50%;
             display: none;
             z-index: 1001;
+            transition: all 0.1s ease-out;
         }
 
         .object-controls {
@@ -157,11 +150,6 @@
 </head>
 <body>
     <div class="toolbar">
-        <button onclick="toggleDarkMode()" id="darkModeBtn">
-            <span class="material-icons">dark_mode</span>
-            <span>Dark Mode</span>
-        </button>
-
         <button onclick="toggleSelectMode()" id="selectBtn">
             <span class="material-icons">open_with</span>
             <span>Select</span>
@@ -177,9 +165,9 @@
         </button>
 
         <div class="brush-controls">
-            <button onclick="changeColor('black')" id="blackPenBtn" class="active-tool">
+            <button onclick="changeColor('white')" id="whitePenBtn" class="active-tool">
                 <span class="material-icons">brush</span>
-                <span id="penColorLabel">Black</span>
+                <span id="penColorLabel">White</span>
             </button>
             <button onclick="changeColor('#e53935')" id="redPenBtn">
                 <span class="material-icons">brush</span>
@@ -236,44 +224,80 @@
         let undoStacks = [];
         let redoStacks = [];
         let isEraser = false;
-        let isDarkMode = false;
         let isSelectMode = false;
         let lastMousePos = { x: 0, y: 0 };
         const eraserCursor = document.getElementById('eraserCursor');
 
-        // Image paste handler
+        // Paste handler for both images and text
         document.addEventListener('paste', async (e) => {
             const items = e.clipboardData.items;
+            let handled = false;
+
+            // Handle text paste
             for (const item of items) {
-                if (item.type.indexOf('image') === 0) {
+                if (item.type === 'text/plain') {
                     e.preventDefault();
-                    const blob = item.getAsFile();
-                    const reader = new FileReader();
-                    
-                    reader.onload = (event) => {
-                        fabric.Image.fromURL(event.target.result, (img) => {
-                            const canvas = pages[currentPageIndex];
-                            img.set({
-                                left: lastMousePos.x || canvas.width/2,
-                                top: lastMousePos.y || canvas.height/2,
-                                scaleX: 0.5,
-                                scaleY: 0.5,
-                                cornerSize: 8,
-                                transparentCorners: false,
-                                selectable: true,
-                                hasControls: true
+                    const text = await new Promise(resolve => item.getAsString(resolve));
+                    addTextToCanvas(text);
+                    handled = true;
+                    break;
+                }
+            }
+
+            // Handle image paste if text not found
+            if (!handled) {
+                for (const item of items) {
+                    if (item.type.indexOf('image') === 0) {
+                        e.preventDefault();
+                        const blob = item.getAsFile();
+                        const reader = new FileReader();
+                        
+                        reader.onload = (event) => {
+                            fabric.Image.fromURL(event.target.result, (img) => {
+                                const canvas = pages[currentPageIndex];
+                                img.set({
+                                    left: lastMousePos.x || canvas.width/2,
+                                    top: lastMousePos.y || canvas.height/2,
+                                    scaleX: 0.5,
+                                    scaleY: 0.5,
+                                    cornerSize: 8,
+                                    transparentCorners: false,
+                                    selectable: true,
+                                    hasControls: true
+                                });
+                                canvas.add(img);
+                                canvas.setActiveObject(img);
+                                canvas.requestRenderAll();
+                                saveState(currentPageIndex);
+                                toggleSelectMode();
                             });
-                            canvas.add(img);
-                            canvas.setActiveObject(img);
-                            canvas.requestRenderAll();
-                            saveState(currentPageIndex);
-                            toggleSelectMode();
-                        });
-                    };
-                    reader.readAsDataURL(blob);
+                        };
+                        reader.readAsDataURL(blob);
+                        break;
+                    }
                 }
             }
         });
+
+        function addTextToCanvas(text) {
+            const canvas = pages[currentPageIndex];
+            const textObject = new fabric.Text(text, {
+                left: lastMousePos.x || canvas.width/2,
+                top: lastMousePos.y || canvas.height/2,
+                fontSize: 20,
+                fill: '#ffffff',
+                fontFamily: 'Arial',
+                hasControls: true,
+                hasBorders: true,
+                selectable: true
+            });
+            
+            canvas.add(textObject);
+            canvas.setActiveObject(textObject);
+            canvas.requestRenderAll();
+            saveState(currentPageIndex);
+            toggleSelectMode();
+        }
 
         function toggleSelectMode() {
             isSelectMode = !isSelectMode;
@@ -290,6 +314,19 @@
             }
         }
 
+        // Keyboard shortcuts for Undo (Ctrl+Z) and Redo (Ctrl+Y)
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+                if (e.key.toLowerCase() === 'z') {
+                    e.preventDefault();
+                    undo();
+                } else if (e.key.toLowerCase() === 'y') {
+                    e.preventDefault();
+                    redo();
+                }
+            }
+        });
+
         function createNewPage() {
             const pageContainer = document.createElement('div');
             pageContainer.className = 'page-container';
@@ -301,11 +338,14 @@
             
             const canvas = new fabric.Canvas(canvasEl, {
                 isDrawingMode: true,
-                backgroundColor: isDarkMode ? '#2d2d2d' : '#ffffff',
+                backgroundColor: '#2d2d2d',
                 selection: false,
                 preserveObjectStacking: true
             });
-
+            // Set initial brush settings: white ink by default.
+            canvas.freeDrawingBrush.color = 'white';
+            canvas.freeDrawingBrush.width = parseInt(document.getElementById('brushSize').value);
+            
             const pageIndex = pages.length;
             
             canvas.on('mouse:move', (options) => {
@@ -322,10 +362,12 @@
                 if (isEraser) {
                     eraserCursor.style.display = 'block';
                     const rect = canvasEl.getBoundingClientRect();
-                    eraserCursor.style.left = `${e.clientX - rect.left - canvas.freeDrawingBrush.width/2}px`;
-                    eraserCursor.style.top = `${e.clientY - rect.top - canvas.freeDrawingBrush.width/2}px`;
-                    eraserCursor.style.width = `${canvas.freeDrawingBrush.width}px`;
-                    eraserCursor.style.height = `${canvas.freeDrawingBrush.width}px`;
+                    // Center the eraser circle on the mouse cursor
+                    const brushSize = canvas.freeDrawingBrush.width;
+                    eraserCursor.style.left = `${e.clientX - rect.left - brushSize / 2}px`;
+                    eraserCursor.style.top = `${e.clientY - rect.top - brushSize / 2}px`;
+                    eraserCursor.style.width = `${brushSize}px`;
+                    eraserCursor.style.height = `${brushSize}px`;
                 }
             });
 
@@ -388,22 +430,21 @@
 
         function changeColor(color) {
             isEraser = false;
-            const actualColor = color === 'black' ? (isDarkMode ? 'white' : 'black') : color;
-            pages[currentPageIndex].freeDrawingBrush.color = actualColor;
+            pages[currentPageIndex].freeDrawingBrush.color = color;
             document.querySelectorAll('.active-tool').forEach(btn => btn.classList.remove('active-tool'));
-            document.getElementById(color === 'black' ? 'blackPenBtn' : 'redPenBtn').classList.add('active-tool');
-            document.getElementById('penColorLabel').textContent = color === 'black' ? (isDarkMode ? 'White' : 'Black') : 'Red';
+            document.getElementById(color === 'white' ? 'whitePenBtn' : 'redPenBtn').classList.add('active-tool');
+            document.getElementById('penColorLabel').textContent = color === 'white' ? 'White' : 'Red';
         }
 
         function toggleEraser() {
             isEraser = !isEraser;
             const canvas = pages[currentPageIndex];
-            canvas.freeDrawingBrush.color = isEraser ? (isDarkMode ? '#2d2d2d' : '#ffffff') : 
-                (isDarkMode ? 'white' : 'black');
+            // When eraser is active, set the brush color to match the background.
+            canvas.freeDrawingBrush.color = isEraser ? '#2d2d2d' : 'white';
             canvas.freeDrawingBrush.width = isEraser ? 20 : parseInt(document.getElementById('brushSize').value);
             document.getElementById('brushSizeValue').textContent = canvas.freeDrawingBrush.width;
             document.querySelectorAll('.active-tool').forEach(btn => btn.classList.remove('active-tool'));
-            document.getElementById(isEraser ? 'eraserBtn' : 'blackPenBtn').classList.add('active-tool');
+            document.getElementById(isEraser ? 'eraserBtn' : 'whitePenBtn').classList.add('active-tool');
             eraserCursor.style.display = isEraser ? 'block' : 'none';
         }
 
@@ -415,7 +456,7 @@
         function clearCanvas() {
             const canvas = pages[currentPageIndex];
             canvas.clear();
-            canvas.backgroundColor = isDarkMode ? '#2d2d2d' : '#ffffff';
+            canvas.backgroundColor = '#2d2d2d';
             canvas.renderAll();
             saveState(currentPageIndex);
         }
@@ -425,7 +466,7 @@
                 const dataURL = page.toDataURL({ 
                     format: 'png', 
                     quality: 1,
-                    backgroundColor: isDarkMode ? '#2d2d2d' : '#ffffff'
+                    backgroundColor: '#2d2d2d'
                 });
                 const link = document.createElement('a');
                 link.download = `page-${index + 1}.png`;
@@ -446,7 +487,7 @@
                 const imgData = page.toDataURL({ 
                     format: 'png', 
                     quality: 1,
-                    backgroundColor: isDarkMode ? '#2d2d2d' : '#ffffff'
+                    backgroundColor: '#2d2d2d'
                 });
                 doc.addImage(imgData, 'PNG', 0, 0, 210, 297);
             });
@@ -476,26 +517,6 @@
             if (activeObject) {
                 canvas.remove(activeObject);
                 saveState(currentPageIndex);
-            }
-        }
-
-        function toggleDarkMode() {
-            isDarkMode = !isDarkMode;
-            document.body.classList.toggle('dark-mode');
-            const darkModeBtn = document.getElementById('darkModeBtn');
-            darkModeBtn.querySelector('.material-icons').textContent = isDarkMode ? 'light_mode' : 'dark_mode';
-            darkModeBtn.querySelector('span:last-child').textContent = isDarkMode ? 'Light Mode' : 'Dark Mode';
-
-            const bgColor = isDarkMode ? '#2d2d2d' : '#ffffff';
-            pages.forEach(canvas => {
-                canvas.backgroundColor = bgColor;
-                canvas.renderAll();
-            });
-
-            if (isDarkMode) {
-                if (pages[currentPageIndex].freeDrawingBrush.color === 'black') changeColor('white');
-            } else {
-                if (pages[currentPageIndex].freeDrawingBrush.color === 'white') changeColor('black');
             }
         }
 
