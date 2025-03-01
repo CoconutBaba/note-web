@@ -20,6 +20,13 @@
             padding: 0;
             background-color: var(--background);
             font-family: 'Segoe UI', system-ui, sans-serif;
+            transition: background-color 0.3s;
+        }
+
+        body.dark-mode {
+            --background: #1a1a1a;
+            --surface: #2d2d2d;
+            --primary-color: #ffffff;
         }
 
         .toolbar {
@@ -33,6 +40,7 @@
             z-index: 1000;
             flex-wrap: wrap;
             align-items: center;
+            transition: background-color 0.3s;
         }
 
         button {
@@ -49,13 +57,14 @@
         }
 
         button:hover {
-            background: #f8f8f8;
+            background: var(--background);
             transform: translateY(-1px);
         }
 
-        button.active {
+        button.active-tool {
             border-color: var(--accent-color);
             color: var(--accent-color);
+            box-shadow: 0 0 0 2px var(--accent-color);
         }
 
         .material-icons {
@@ -78,7 +87,7 @@
             height: 1123px;
             position: relative;
             border-radius: 12px;
-            transition: transform 0.2s;
+            transition: all 0.3s;
         }
 
         .page-container.active-page {
@@ -100,6 +109,26 @@
             border-radius: 8px;
         }
 
+        .eraser-cursor {
+            position: absolute;
+            pointer-events: none;
+            border: 2px solid #ff0000;
+            border-radius: 50%;
+            display: none;
+            z-index: 1001;
+        }
+
+        .object-controls {
+            position: absolute;
+            top: 70px;
+            left: 24px;
+            background: var(--surface);
+            padding: 8px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+
         @media (max-width: 800px) {
             .toolbar {
                 gap: 8px;
@@ -114,11 +143,30 @@
                 width: 95vw;
                 height: calc(95vw * 1.414);
             }
+
+            .object-controls {
+                top: 120px;
+                left: 8px;
+            }
+        }
+        .txt {
+            color: var(--primary-color);
+            border-radius: 10%;
         }
     </style>
 </head>
 <body>
     <div class="toolbar">
+        <button onclick="toggleDarkMode()" id="darkModeBtn">
+            <span class="material-icons">dark_mode</span>
+            <span>Dark Mode</span>
+        </button>
+
+        <button onclick="toggleSelectMode()" id="selectBtn">
+            <span class="material-icons">open_with</span>
+            <span>Select</span>
+        </button>
+
         <button onclick="undo()">
             <span class="material-icons">undo</span>
             <span>Undo</span>
@@ -129,11 +177,11 @@
         </button>
 
         <div class="brush-controls">
-            <button onclick="changeColor('black')" class="active">
+            <button onclick="changeColor('black')" id="blackPenBtn" class="active-tool">
                 <span class="material-icons">brush</span>
-                <span>Black</span>
+                <span id="penColorLabel">Black</span>
             </button>
-            <button onclick="changeColor('#e53935')">
+            <button onclick="changeColor('#e53935')" id="redPenBtn">
                 <span class="material-icons">brush</span>
                 <span>Red</span>
             </button>
@@ -145,7 +193,7 @@
                 <span>Eraser</span>
             </button>
             <input type="range" id="brushSize" min="1" max="50" value="5" onchange="changeBrushSize(this.value)">
-            <span>Size: <span id="brushSizeValue">5</span></span>
+            <span class="txt">Size: <span id="brushSizeValue">5</span></span>
         </div>
 
         <div class="brush-controls">
@@ -164,9 +212,21 @@
         </div>
     </div>
 
-    <div id="pages"></div>
+    <div class="object-controls" id="objectControls" style="display: none;">
+        <button onclick="bringForward()">
+            <span class="material-icons">arrow_upward</span>
+        </button>
+        <button onclick="sendBackward()">
+            <span class="material-icons">arrow_downward</span>
+        </button>
+        <button onclick="deleteSelected()">
+            <span class="material-icons">delete</span>
+        </button>
+    </div>
 
-    <!-- EXACT SAME JAVASCRIPT AS BEFORE -->
+    <div id="pages"></div>
+    <div id="eraserCursor" class="eraser-cursor"></div>
+
     <script>
         window.jspdf = window.jspdf || { jsPDF: window.jspdf.jsPDF };
         const { jsPDF } = window.jspdf;
@@ -175,6 +235,60 @@
         let pages = [];
         let undoStacks = [];
         let redoStacks = [];
+        let isEraser = false;
+        let isDarkMode = false;
+        let isSelectMode = false;
+        let lastMousePos = { x: 0, y: 0 };
+        const eraserCursor = document.getElementById('eraserCursor');
+
+        // Image paste handler
+        document.addEventListener('paste', async (e) => {
+            const items = e.clipboardData.items;
+            for (const item of items) {
+                if (item.type.indexOf('image') === 0) {
+                    e.preventDefault();
+                    const blob = item.getAsFile();
+                    const reader = new FileReader();
+                    
+                    reader.onload = (event) => {
+                        fabric.Image.fromURL(event.target.result, (img) => {
+                            const canvas = pages[currentPageIndex];
+                            img.set({
+                                left: lastMousePos.x || canvas.width/2,
+                                top: lastMousePos.y || canvas.height/2,
+                                scaleX: 0.5,
+                                scaleY: 0.5,
+                                cornerSize: 8,
+                                transparentCorners: false,
+                                selectable: true,
+                                hasControls: true
+                            });
+                            canvas.add(img);
+                            canvas.setActiveObject(img);
+                            canvas.requestRenderAll();
+                            saveState(currentPageIndex);
+                            toggleSelectMode();
+                        });
+                    };
+                    reader.readAsDataURL(blob);
+                }
+            }
+        });
+
+        function toggleSelectMode() {
+            isSelectMode = !isSelectMode;
+            const canvas = pages[currentPageIndex];
+            canvas.isDrawingMode = !isSelectMode;
+            canvas.selection = isSelectMode;
+            canvas.forEachObject(obj => obj.selectable = isSelectMode);
+            document.getElementById('objectControls').style.display = isSelectMode ? 'block' : 'none';
+            canvas.requestRenderAll();
+            
+            document.querySelectorAll('.active-tool').forEach(btn => btn.classList.remove('active-tool'));
+            if (isSelectMode) {
+                document.getElementById('selectBtn').classList.add('active-tool');
+            }
+        }
 
         function createNewPage() {
             const pageContainer = document.createElement('div');
@@ -187,11 +301,38 @@
             
             const canvas = new fabric.Canvas(canvasEl, {
                 isDrawingMode: true,
-                backgroundColor: '#ffffff'
+                backgroundColor: isDarkMode ? '#2d2d2d' : '#ffffff',
+                selection: false,
+                preserveObjectStacking: true
             });
 
             const pageIndex = pages.length;
             
+            canvas.on('mouse:move', (options) => {
+                lastMousePos = options.absolutePointer;
+            });
+
+            canvas.on('mouse:down', (options) => {
+                lastMousePos = options.absolutePointer;
+            });
+
+            canvas.on('object:modified', () => saveState(pageIndex));
+
+            canvasEl.addEventListener('mousemove', (e) => {
+                if (isEraser) {
+                    eraserCursor.style.display = 'block';
+                    const rect = canvasEl.getBoundingClientRect();
+                    eraserCursor.style.left = `${e.clientX - rect.left - canvas.freeDrawingBrush.width/2}px`;
+                    eraserCursor.style.top = `${e.clientY - rect.top - canvas.freeDrawingBrush.width/2}px`;
+                    eraserCursor.style.width = `${canvas.freeDrawingBrush.width}px`;
+                    eraserCursor.style.height = `${canvas.freeDrawingBrush.width}px`;
+                }
+            });
+
+            canvasEl.addEventListener('mouseleave', () => {
+                eraserCursor.style.display = 'none';
+            });
+
             pageContainer.addEventListener('click', () => switchPage(pageIndex));
             canvas.on('path:created', () => {
                 saveState(pageIndex);
@@ -228,8 +369,7 @@
         }
 
         function undo() {
-            if (!undoStacks[currentPageIndex] || undoStacks[currentPageIndex].length <= 1) return;
-            
+            if (undoStacks[currentPageIndex].length <= 1) return;
             redoStacks[currentPageIndex].push(undoStacks[currentPageIndex].pop());
             pages[currentPageIndex].loadFromJSON(
                 undoStacks[currentPageIndex][undoStacks[currentPageIndex].length - 1],
@@ -238,8 +378,7 @@
         }
 
         function redo() {
-            if (!redoStacks[currentPageIndex] || redoStacks[currentPageIndex].length === 0) return;
-            
+            if (!redoStacks[currentPageIndex]?.length) return;
             undoStacks[currentPageIndex].push(redoStacks[currentPageIndex].pop());
             pages[currentPageIndex].loadFromJSON(
                 undoStacks[currentPageIndex][undoStacks[currentPageIndex].length - 1],
@@ -247,29 +386,25 @@
             );
         }
 
-        document.addEventListener('keydown', (e) => {
-            if ((e.ctrlKey || e.metaKey) && !e.altKey) {
-                e.preventDefault();
-                if (e.key === 'z') undo();
-                if (e.key === 'y') redo();
-            }
-        });
-
-        let isEraser = false;
         function changeColor(color) {
             isEraser = false;
-            pages[currentPageIndex].freeDrawingBrush.color = color;
-            pages[currentPageIndex].isDrawingMode = true;
-            document.getElementById('brushSizeValue').textContent = 
-                pages[currentPageIndex].freeDrawingBrush.width;
+            const actualColor = color === 'black' ? (isDarkMode ? 'white' : 'black') : color;
+            pages[currentPageIndex].freeDrawingBrush.color = actualColor;
+            document.querySelectorAll('.active-tool').forEach(btn => btn.classList.remove('active-tool'));
+            document.getElementById(color === 'black' ? 'blackPenBtn' : 'redPenBtn').classList.add('active-tool');
+            document.getElementById('penColorLabel').textContent = color === 'black' ? (isDarkMode ? 'White' : 'Black') : 'Red';
         }
 
         function toggleEraser() {
             isEraser = !isEraser;
-            pages[currentPageIndex].freeDrawingBrush.color = isEraser ? 'white' : 'black';
-            pages[currentPageIndex].freeDrawingBrush.width = isEraser ? 20 : 5;
-            document.getElementById('brushSizeValue').textContent = 
-                pages[currentPageIndex].freeDrawingBrush.width;
+            const canvas = pages[currentPageIndex];
+            canvas.freeDrawingBrush.color = isEraser ? (isDarkMode ? '#2d2d2d' : '#ffffff') : 
+                (isDarkMode ? 'white' : 'black');
+            canvas.freeDrawingBrush.width = isEraser ? 20 : parseInt(document.getElementById('brushSize').value);
+            document.getElementById('brushSizeValue').textContent = canvas.freeDrawingBrush.width;
+            document.querySelectorAll('.active-tool').forEach(btn => btn.classList.remove('active-tool'));
+            document.getElementById(isEraser ? 'eraserBtn' : 'blackPenBtn').classList.add('active-tool');
+            eraserCursor.style.display = isEraser ? 'block' : 'none';
         }
 
         function changeBrushSize(size) {
@@ -278,15 +413,20 @@
         }
 
         function clearCanvas() {
-            pages[currentPageIndex].clear();
-            pages[currentPageIndex].backgroundColor = '#ffffff';
-            pages[currentPageIndex].renderAll();
+            const canvas = pages[currentPageIndex];
+            canvas.clear();
+            canvas.backgroundColor = isDarkMode ? '#2d2d2d' : '#ffffff';
+            canvas.renderAll();
             saveState(currentPageIndex);
         }
 
         function saveAsImage() {
             pages.forEach((page, index) => {
-                const dataURL = page.toDataURL({ format: 'png', quality: 1 });
+                const dataURL = page.toDataURL({ 
+                    format: 'png', 
+                    quality: 1,
+                    backgroundColor: isDarkMode ? '#2d2d2d' : '#ffffff'
+                });
                 const link = document.createElement('a');
                 link.download = `page-${index + 1}.png`;
                 link.href = dataURL;
@@ -303,11 +443,60 @@
 
             pages.forEach((page, index) => {
                 if (index > 0) doc.addPage();
-                const imgData = page.toDataURL({ format: 'png', quality: 1 });
+                const imgData = page.toDataURL({ 
+                    format: 'png', 
+                    quality: 1,
+                    backgroundColor: isDarkMode ? '#2d2d2d' : '#ffffff'
+                });
                 doc.addImage(imgData, 'PNG', 0, 0, 210, 297);
             });
 
             doc.save('notes.pdf');
+        }
+
+        function bringForward() {
+            const activeObject = pages[currentPageIndex].getActiveObject();
+            if (activeObject) {
+                activeObject.bringForward();
+                saveState(currentPageIndex);
+            }
+        }
+
+        function sendBackward() {
+            const activeObject = pages[currentPageIndex].getActiveObject();
+            if (activeObject) {
+                activeObject.sendBackwards();
+                saveState(currentPageIndex);
+            }
+        }
+
+        function deleteSelected() {
+            const canvas = pages[currentPageIndex];
+            const activeObject = canvas.getActiveObject();
+            if (activeObject) {
+                canvas.remove(activeObject);
+                saveState(currentPageIndex);
+            }
+        }
+
+        function toggleDarkMode() {
+            isDarkMode = !isDarkMode;
+            document.body.classList.toggle('dark-mode');
+            const darkModeBtn = document.getElementById('darkModeBtn');
+            darkModeBtn.querySelector('.material-icons').textContent = isDarkMode ? 'light_mode' : 'dark_mode';
+            darkModeBtn.querySelector('span:last-child').textContent = isDarkMode ? 'Light Mode' : 'Dark Mode';
+
+            const bgColor = isDarkMode ? '#2d2d2d' : '#ffffff';
+            pages.forEach(canvas => {
+                canvas.backgroundColor = bgColor;
+                canvas.renderAll();
+            });
+
+            if (isDarkMode) {
+                if (pages[currentPageIndex].freeDrawingBrush.color === 'black') changeColor('white');
+            } else {
+                if (pages[currentPageIndex].freeDrawingBrush.color === 'white') changeColor('black');
+            }
         }
 
         // Initialize first page
