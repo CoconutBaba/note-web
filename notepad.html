@@ -1,22 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>InkFlow</title>
-  <!-- Fabric, jsPDF, pdf.js, Material Icons -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
   <style>
+    /* Root Colors */
     :root {
       --primary-color: #ffffff;
       --accent-color: #2196F3;
       --background: #1a1a1a;
       --surface: #2d2d2d;
     }
-    /* File Tree (Left) - Overlay */
+    /* File Tree (Left) */
     .file-tree {
       position: fixed;
       top: 0;
@@ -25,10 +25,11 @@
       height: 100vh;
       background: var(--surface);
       padding: 16px;
-      box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+      box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
       color: var(--primary-color);
       overflow-y: auto;
       z-index: 1000;
+      display: none;
     }
     .file-tree .header {
       display: flex;
@@ -64,12 +65,13 @@
       border: 2px solid var(--accent-color);
     }
     .file-tree li:hover {
-      background: rgba(255,255,255,0.1);
+      background: rgba(255, 255, 255, 0.1);
     }
     .folder-title {
       flex: 1;
     }
-    .rename-folder, .delete-folder {
+    .rename-folder,
+    .delete-folder {
       position: absolute;
       top: 50%;
       transform: translateY(-50%);
@@ -83,25 +85,29 @@
     .delete-folder {
       right: 8px;
     }
-    .rename-folder:hover, .delete-folder:hover {
+    .rename-folder:hover,
+    .delete-folder:hover {
       opacity: 1;
     }
-
-    /* Toolbar (Right) */
+    /* Toolbar (Right) with Toggle */
     .toolbar {
       position: fixed;
       top: 0;
-      right: 0;
+      right: -250px;
       width: 250px;
       height: 100vh;
       padding: 16px;
       background: var(--surface);
-      box-shadow: -2px 0 8px rgba(0,0,0,0.1);
+      box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
       display: flex;
       flex-direction: column;
       gap: 16px;
       overflow-y: auto;
       z-index: 1000;
+      transition: right 0.3s ease;
+    }
+    .toolbar.visible {
+      right: 0;
     }
     .toolbar-row {
       display: flex;
@@ -133,16 +139,43 @@
     .material-icons {
       font-size: 20px;
     }
-    /* Pages container occupies full width when file tree is hidden */
+    /* Toggle Toolbar Button */
+    .toggle-toolbar {
+      position: fixed;
+      top: 50%;
+      right: 0;
+      transform: translateY(-50%);
+      background: var(--surface);
+      border: none;
+      border-radius: 8px 0 0 8px;
+      padding: 12px;
+      cursor: pointer;
+      color: var(--primary-color);
+      box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+      z-index: 1000;
+      transition: right 0.3s ease;
+    }
+    .toggle-toolbar:hover {
+      background: #373737;
+    }
+    .toggle-toolbar .material-icons {
+      font-size: 24px;
+      transition: transform 0.3s ease;
+    }
+    /* Pages Container */
     #pages {
-      margin: 16px 260px 16px 16px;
+      margin: 16px;
       padding: 24px;
       display: flex;
       flex-direction: column;
       gap: 32px;
       align-items: center;
+      transition: margin-right 0.3s ease;
     }
-    /* Each folder's container is divided into a page list and content */
+    .toolbar.visible ~ #pages {
+      margin-right: 266px;
+    }
+    /* Additional InkFlow Styles */
     .folder-container {
       display: none;
       width: 100%;
@@ -176,10 +209,9 @@
       flex-direction: column;
       gap: 32px;
     }
-    /* Canvas page styling */
     .page-container {
       background-color: var(--surface);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
       width: 794px;
       height: 1123px;
       position: relative;
@@ -188,7 +220,7 @@
     }
     .page-container.active-page {
       border: 2px solid var(--accent-color);
-      box-shadow: 0 0 0 2px var(--accent-color), 0 8px 16px rgba(0,0,0,0.1);
+      box-shadow: 0 0 0 2px var(--accent-color), 0 8px 16px rgba(0, 0, 0, 0.1);
       transform: scale(1.02);
     }
     input[type="range"] {
@@ -199,7 +231,7 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      background: rgba(255,255,255,0.05);
+      background: rgba(255, 255, 255, 0.05);
       padding: 8px 16px;
       border-radius: 8px;
     }
@@ -216,8 +248,8 @@
       z-index: 1001;
       transition: transform 0.1s ease-out;
       box-sizing: border-box;
-      background-color: rgba(255,68,68,0.1);
-      box-shadow: 0 0 8px rgba(255,68,68,0.3);
+      background-color: rgba(255, 68, 68, 0.1);
+      box-shadow: 0 0 8px rgba(255, 68, 68, 0.3);
     }
     .object-controls {
       position: absolute;
@@ -226,7 +258,7 @@
       background: var(--surface);
       padding: 8px;
       border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
       z-index: 1000;
     }
     @media (max-width: 800px) {
@@ -252,8 +284,13 @@
   </style>
 </head>
 <body>
+  <!-- Toggle Toolbar Button -->
+  <button class="toggle-toolbar" id="toggleToolbarBtn" onclick="toggleToolbar()">
+    <span class="material-icons">chevron_left</span>
+  </button>
+  
   <!-- File Tree (Left) - Hidden by default -->
-  <div class="file-tree" id="fileTree" style="display:none;">
+  <div class="file-tree" id="fileTree" style="display: none;">
     <div class="header">
       <button onclick="createNewFolder()">New Folder</button>
     </div>
@@ -261,9 +298,9 @@
       <!-- Folder entries will appear here -->
     </ul>
   </div>
-
+  
   <!-- Toolbar (Right) -->
-  <div class="toolbar">
+  <div class="toolbar" id="mainToolbar">
     <div class="toolbar-row">
       <button onclick="toggleSelectMode()" id="selectBtn">
         <span class="material-icons">open_with</span>
@@ -290,7 +327,7 @@
         </button>
       </div>
     </div>
-    <!-- RGB Pen Button and Color Picker -->
+    <!-- Additional Toolbar Content (RGB, Highlighter, Eraser, etc.) -->
     <div class="toolbar-row">
       <div class="brush-controls">
         <button onclick="toggleRgbPen()" id="rgbPenBtn">
@@ -301,10 +338,9 @@
     </div>
     <div class="toolbar-row">
       <div class="brush-controls">
-        <input type="color" id="rgbColorPicker" value="#000000" onchange="changeRgbColor(this.value)">
+        <input type="color" id="rgbColorPicker" value="#000000" onchange="changeRgbColor(this.value)" />
       </div>
     </div>
-    <!-- Highlighter Pen Button and Color Picker -->
     <div class="toolbar-row">
       <div class="brush-controls">
         <button onclick="toggleHighlightPen()" id="highlightPenBtn">
@@ -315,7 +351,7 @@
     </div>
     <div class="toolbar-row">
       <div class="brush-controls">
-        <input type="color" id="highlightColorPicker" value="#ffff00" onchange="changeHighlightColor(this.value)">
+        <input type="color" id="highlightColorPicker" value="#ffff00" onchange="changeHighlightColor(this.value)" />
       </div>
     </div>
     <div class="toolbar-row">
@@ -328,7 +364,7 @@
     </div>
     <div class="toolbar-row">
       <div class="brush-controls">
-        <input type="range" id="brushSize" min="1" max="50" value="5" onchange="changeBrushSize(this.value)">
+        <input type="range" id="brushSize" min="1" max="50" value="5" onchange="changeBrushSize(this.value)" />
         <span class="txt">Size: <span id="brushSizeValue">5</span></span>
       </div>
     </div>
@@ -356,17 +392,17 @@
         </button>
       </div>
     </div>
-    <!-- New Toggle File Tree Button -->
+    <!-- Toggle File Tree Button -->
     <div class="toolbar-row">
       <button onclick="toggleFileTree()" id="toggleFileTreeBtn" style="border-radius:50%; width:40px; height:40px; font-size:24px; display:flex; align-items:center; justify-content:center;">
         +
       </button>
     </div>
   </div>
-
-  <!-- Hidden file input for PDFs -->
-  <input type="file" id="pdfInput" accept="application/pdf" style="display:none">
-
+  
+  <!-- Hidden PDF file input -->
+  <input type="file" id="pdfInput" accept="application/pdf" style="display: none" />
+  
   <div class="object-controls" id="objectControls" style="display: none;">
     <button onclick="bringForward()">
       <span class="material-icons">arrow_upward</span>
@@ -378,12 +414,26 @@
       <span class="material-icons">delete</span>
     </button>
   </div>
-
-  <!-- Pages container: Folder containers will be appended here -->
+  
+  <!-- Pages Container -->
   <div id="pages"></div>
   <div id="eraserCursor" class="eraser-cursor"></div>
-
+  
   <script>
+    // Toggle Toolbar Function
+    function toggleToolbar() {
+      const toolbar = document.getElementById('mainToolbar');
+      const toggleBtn = document.getElementById('toggleToolbarBtn');
+      toolbar.classList.toggle('visible');
+      if (toolbar.classList.contains('visible')) {
+        toggleBtn.innerHTML = '<span class="material-icons">chevron_right</span>';
+        toggleBtn.style.right = '250px';
+      } else {
+        toggleBtn.innerHTML = '<span class="material-icons">chevron_left</span>';
+        toggleBtn.style.right = '0';
+      }
+    }
+    
     /***** Global Variables *****/
     let folders = {};
     let currentFolderId = null;
@@ -392,32 +442,22 @@
     const eraserCursor = document.getElementById('eraserCursor');
     let isEraser = false;
     let isSelectMode = false;
-    // Store the white pen's brush size separately
     let penBrushSize = 5;
-    // Global variable for the RGB pen color
     let rgbPenColor = "#000000";
-    // Global variables for the highlighter pen
     let highlightPenColor = "#ffff00";
-    const highlightPenSize = 15; // Fixed size for highlighter pen (larger than default)
-    const highlightOpacity = 0.3; // Lower opacity for highlighting
-
-    // LOCAL STORAGE key
+    const highlightPenSize = 15;
+    const highlightOpacity = 0.3;
     const STORAGE_KEY = 'inkflowData';
-
-    /***** Helper Function *****/
+    
     function hexToRgba(hex, opacity) {
       let r = parseInt(hex.substr(1, 2), 16);
       let g = parseInt(hex.substr(3, 2), 16);
       let b = parseInt(hex.substr(5, 2), 16);
       return "rgba(" + r + "," + g + "," + b + "," + opacity + ")";
     }
-
-    /***** Local Storage Functions *****/
+    
     function saveToLocalStorage() {
-      const dataToSave = {
-        currentFolderId,
-        folders: {}
-      };
+      const dataToSave = { currentFolderId, folders: {} };
       for (const id in folders) {
         const folder = folders[id];
         const titleElem = document.querySelector(`li[data-id="${id}"] .folder-title`);
@@ -425,18 +465,16 @@
         dataToSave.folders[id] = {
           title,
           currentPageIndex: folder.currentPageIndex,
-          pages: folder.pages.map(pageObj => {
-            return {
-              undoStack: pageObj.undoStack,
-              redoStack: pageObj.redoStack,
-              hasTriggeredNewPage: pageObj.hasTriggeredNewPage
-            };
-          })
+          pages: folder.pages.map(pageObj => ({
+            undoStack: pageObj.undoStack,
+            redoStack: pageObj.redoStack,
+            hasTriggeredNewPage: pageObj.hasTriggeredNewPage
+          }))
         };
       }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
     }
-
+    
     function loadFromLocalStorage() {
       const data = localStorage.getItem(STORAGE_KEY);
       if (!data) return;
@@ -480,15 +518,9 @@
               canvas.renderAll();
             });
           }
-          canvas.on('mouse:move', (options) => {
-            lastMousePos = options.absolutePointer;
-          });
-          canvas.on('mouse:down', (options) => {
-            lastMousePos = options.absolutePointer;
-          });
-          canvas.on('object:modified', () => {
-            saveStateForCurrentPage();
-          });
+          canvas.on('mouse:move', (options) => { lastMousePos = options.absolutePointer; });
+          canvas.on('mouse:down', (options) => { lastMousePos = options.absolutePointer; });
+          canvas.on('object:modified', () => { saveStateForCurrentPage(); });
           canvas.on('path:created', () => {
             saveStateForCurrentPage();
             checkForNewPage();
@@ -506,8 +538,7 @@
       }
       if (currentFolderId) switchFolder(currentFolderId);
     }
-
-    /***** File Tree Functions *****/
+    
     function addFolderToFileTree(folderId, title) {
       const ul = document.getElementById('fileTreeList');
       const li = document.createElement('li');
@@ -524,7 +555,7 @@
       `;
       ul.appendChild(li);
     }
-
+    
     function renameFolder(folderId, event) {
       event.stopPropagation();
       const folderElement = document.querySelector(`li[data-id="${folderId}"] .folder-title`);
@@ -535,7 +566,7 @@
         saveToLocalStorage();
       }
     }
-
+    
     function deleteFolder(folderId, event) {
       event.stopPropagation();
       if (!confirm("Are you sure you want to delete this folder?")) return;
@@ -551,14 +582,14 @@
       }
       saveToLocalStorage();
     }
-
+    
     function updateFileTreeSelection(folderId) {
       const items = document.querySelectorAll('.file-tree li');
       items.forEach(item => item.classList.remove('selected'));
       const selected = document.querySelector(`.file-tree li[data-id="${folderId}"]`);
       if (selected) selected.classList.add('selected');
     }
-
+    
     function createNewFolder() {
       const folderId = 'folder-' + Date.now().toString();
       const folderContainer = document.createElement('div');
@@ -575,45 +606,36 @@
       createNewPage();
       saveToLocalStorage();
     }
-
+    
     function switchFolder(folderId) {
       currentFolderId = folderId;
       const folderContainers = document.getElementsByClassName('folder-container');
-      for (let container of folderContainers) {
-        container.style.display = 'none';
-      }
+      for (let container of folderContainers) { container.style.display = 'none'; }
       folders[folderId].container.style.display = 'block';
       updateFileTreeSelection(folderId);
       updateActivePage();
       updatePageList(folderId);
       saveToLocalStorage();
     }
-
-    /***** Folder Page Management *****/
+    
     function getCurrentPage() {
       const folder = folders[currentFolderId];
       return folder.pages[folder.currentPageIndex];
     }
-
+    
     function updateActivePage() {
       const folder = folders[currentFolderId];
       folder.pages.forEach((pageObj, index) => {
-        if (index === folder.currentPageIndex) {
-          pageObj.container.classList.add('active-page');
-        } else {
-          pageObj.container.classList.remove('active-page');
-        }
+        if (index === folder.currentPageIndex) { pageObj.container.classList.add('active-page'); }
+        else { pageObj.container.classList.remove('active-page'); }
       });
     }
-
+    
     function createNewPage() {
       const folder = folders[currentFolderId];
       const pageContainer = document.createElement('div');
       pageContainer.className = 'page-container';
-      pageContainer.onclick = (e) => {
-        if(e.target.closest('.delete-page')) return;
-        selectPage(pageContainer);
-      };
+      pageContainer.onclick = (e) => { if(e.target.closest('.delete-page')) return; selectPage(pageContainer); };
       const pageContent = folder.container.querySelector('.page-content');
       pageContent.appendChild(pageContainer);
       const canvasEl = document.createElement('canvas');
@@ -628,19 +650,10 @@
       });
       canvas.freeDrawingBrush.color = 'white';
       canvas.freeDrawingBrush.width = penBrushSize;
-      canvas.on('mouse:move', (options) => {
-        lastMousePos = options.absolutePointer;
-      });
-      canvas.on('mouse:down', (options) => {
-        lastMousePos = options.absolutePointer;
-      });
-      canvas.on('object:modified', () => {
-        saveStateForCurrentPage();
-      });
-      canvas.on('path:created', () => {
-        saveStateForCurrentPage();
-        checkForNewPage();
-      });
+      canvas.on('mouse:move', (options) => { lastMousePos = options.absolutePointer; });
+      canvas.on('mouse:down', (options) => { lastMousePos = options.absolutePointer; });
+      canvas.on('object:modified', () => { saveStateForCurrentPage(); });
+      canvas.on('path:created', () => { saveStateForCurrentPage(); checkForNewPage(); });
       const pageObj = {
         canvas: canvas,
         container: pageContainer,
@@ -654,7 +667,7 @@
       updatePageList(currentFolderId);
       saveToLocalStorage();
     }
-
+    
     function selectPage(container) {
       const pages = folders[currentFolderId].container.querySelectorAll('.page-container');
       pages.forEach(page => page.classList.remove('active-page'));
@@ -664,8 +677,7 @@
       updatePageList(currentFolderId);
       saveToLocalStorage();
     }
-
-    // Modified auto-create new page: only if current page is the last one and drawn content nears bottom
+    
     function checkForNewPage() {
       const folder = folders[currentFolderId];
       const pageObj = getCurrentPage();
@@ -680,42 +692,34 @@
         getCurrentPage().container.scrollIntoView({ behavior: 'smooth' });
       }
     }
-
+    
     function saveStateForCurrentPage() {
       const pageObj = getCurrentPage();
       pageObj.undoStack.push(pageObj.canvas.toJSON());
       pageObj.redoStack = [];
       saveToLocalStorage();
     }
-
+    
     function undo() {
       const pageObj = getCurrentPage();
       if (pageObj.undoStack.length <= 1) return;
       pageObj.redoStack.push(pageObj.undoStack.pop());
       pageObj.canvas.loadFromJSON(
         pageObj.undoStack[pageObj.undoStack.length - 1],
-        () => {
-          pageObj.canvas.renderAll();
-          saveToLocalStorage();
-        }
+        () => { pageObj.canvas.renderAll(); saveToLocalStorage(); }
       );
     }
-
+    
     function redo() {
       const pageObj = getCurrentPage();
       if (!pageObj.redoStack.length) return;
       pageObj.undoStack.push(pageObj.redoStack.pop());
       pageObj.canvas.loadFromJSON(
         pageObj.undoStack[pageObj.undoStack.length - 1],
-        () => {
-          pageObj.canvas.renderAll();
-          saveToLocalStorage();
-        }
+        () => { pageObj.canvas.renderAll(); saveToLocalStorage(); }
       );
     }
-
-    /***** Page List and Deletion *****/
-    // Updated updatePageList with drag-and-drop for page boxes
+    
     function updatePageList(folderId) {
       const folder = folders[folderId];
       const pageListEl = document.getElementById(`pageList-${folderId}`);
@@ -729,7 +733,6 @@
                          <span class="delete-page" onclick="deletePage('${folderId}', ${index}, event)">
                            <i class="material-icons">delete</i>
                          </span>`;
-        // Click to select the page
         box.addEventListener('click', (e) => {
           if(e.target.closest('.delete-page')) return;
           folder.currentPageIndex = index;
@@ -737,7 +740,6 @@
           updatePageList(folderId);
           saveToLocalStorage();
         });
-        // Drag events for reordering
         box.addEventListener('dragstart', (e) => {
           e.dataTransfer.setData("text/plain", index);
           e.dataTransfer.effectAllowed = "move";
@@ -762,16 +764,15 @@
         pageListEl.appendChild(box);
       });
     }
-
+    
     function deletePage(folderId, pageIndex, event) {
       event.stopPropagation();
       const folder = folders[folderId];
       const pageObj = folder.pages[pageIndex];
       pageObj.container.parentNode.removeChild(pageObj.container);
       folder.pages.splice(pageIndex, 1);
-      if (folder.pages.length === 0) {
-        createNewPage();
-      } else {
+      if (folder.pages.length === 0) { createNewPage(); }
+      else {
         if (folder.currentPageIndex >= folder.pages.length) {
           folder.currentPageIndex = folder.pages.length - 1;
         }
@@ -780,8 +781,7 @@
       }
       saveToLocalStorage();
     }
-
-    /***** PDF and Paste Handling *****/
+    
     pdfInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -820,11 +820,11 @@
       fileReader.readAsArrayBuffer(file);
       pdfInput.value = '';
     });
-
+    
     function openPDF() {
       pdfInput.click();
     }
-
+    
     document.addEventListener('paste', async (e) => {
       const items = e.clipboardData.items;
       let handled = false;
@@ -867,7 +867,7 @@
         }
       }
     });
-
+    
     function addTextToCanvas(text) {
       const canvas = getCurrentPage().canvas;
       const textObj = new fabric.IText(text, {
@@ -894,8 +894,7 @@
         }
       });
     }
-
-    /***** Toolbar Functions *****/
+    
     function toggleSelectMode() {
       isSelectMode = !isSelectMode;
       const canvas = getCurrentPage().canvas;
@@ -908,8 +907,7 @@
       if (isSelectMode) {
         document.getElementById('selectBtn').classList.add('active-tool');
       } else {
-        const activeColor = getCurrentPage().canvas.freeDrawingBrush.color;
-        // Determine which pen button to highlight based on the current brush color
+        const activeColor = canvas.freeDrawingBrush.color;
         if (activeColor === 'white') {
           document.getElementById('whitePenBtn').classList.add('active-tool');
         } else if (activeColor === '#e53935') {
@@ -921,7 +919,7 @@
         }
       }
     }
-
+    
     document.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && !e.altKey) {
         if (e.key.toLowerCase() === 'z') {
@@ -933,8 +931,7 @@
         }
       }
     });
-
-    // Modified changeColor for fixed color pens
+    
     function changeColor(color) {
       isEraser = false;
       const canvas = getCurrentPage().canvas;
@@ -950,25 +947,23 @@
         document.getElementById('brushSizeValue').textContent = penBrushSize;
       }
       document.querySelectorAll('.active-tool').forEach(btn => btn.classList.remove('active-tool'));
-      document.getElementById(color === 'white' ? 'whitePenBtn' : color === '#e53935' ? 'redPenBtn' : 'rgbPenBtn').classList.add('active-tool');
+      document.getElementById(color === 'white' ? 'whitePenBtn' : 'redPenBtn').classList.add('active-tool');
       document.getElementById('penColorLabel').textContent = color === 'white' ? 'White' : 'Red';
       eraserCursor.style.display = 'none';
       if (isSelectMode) toggleSelectMode();
     }
-
+    
     function toggleEraser() {
       const canvas = getCurrentPage().canvas;
       if (!isEraser) {
-        // Switching from white pen to eraser: store current pen size
         penBrushSize = canvas.freeDrawingBrush.width;
         isEraser = true;
         canvas.freeDrawingBrush.color = '#2d2d2d';
-        canvas.freeDrawingBrush.width = 20; // Fixed eraser size
+        canvas.freeDrawingBrush.width = 20;
         eraserCursor.style.display = 'block';
         document.querySelectorAll('.active-tool').forEach(btn => btn.classList.remove('active-tool'));
         document.getElementById('eraserBtn').classList.add('active-tool');
       } else {
-        // Switching back to white pen: restore stored pen size
         isEraser = false;
         canvas.freeDrawingBrush.color = 'white';
         canvas.freeDrawingBrush.width = penBrushSize;
@@ -981,8 +976,7 @@
       if (isSelectMode) toggleSelectMode();
       canvas.isDrawingMode = true;
     }
-
-    // New function for toggling the RGB pen
+    
     function toggleRgbPen() {
       isEraser = false;
       const canvas = getCurrentPage().canvas;
@@ -994,8 +988,7 @@
       eraserCursor.style.display = 'none';
       if (isSelectMode) toggleSelectMode();
     }
-
-    // New function for changing the RGB pen color
+    
     function changeRgbColor(newColor) {
       rgbPenColor = newColor;
       const canvas = getCurrentPage().canvas;
@@ -1004,12 +997,10 @@
       }
       document.getElementById('rgbPenLabel').textContent = newColor;
     }
-
-    // New function for toggling the highlighter pen
+    
     function toggleHighlightPen() {
       isEraser = false;
       const canvas = getCurrentPage().canvas;
-      // Set fixed highlighter size and lower opacity using hexToRgba conversion.
       canvas.freeDrawingBrush.width = highlightPenSize;
       canvas.freeDrawingBrush.color = hexToRgba(highlightPenColor, highlightOpacity);
       document.querySelectorAll('.active-tool').forEach(btn => btn.classList.remove('active-tool'));
@@ -1018,8 +1009,7 @@
       eraserCursor.style.display = 'none';
       if (isSelectMode) toggleSelectMode();
     }
-
-    // New function for changing the highlighter pen color
+    
     function changeHighlightColor(newColor) {
       highlightPenColor = newColor;
       const canvas = getCurrentPage().canvas;
@@ -1028,7 +1018,7 @@
       }
       document.getElementById('highlightPenLabel').textContent = newColor;
     }
-
+    
     function changeBrushSize(size) {
       const canvas = getCurrentPage().canvas;
       if (!isEraser) {
@@ -1037,7 +1027,7 @@
       }
       document.getElementById('brushSizeValue').textContent = size;
     }
-
+    
     function clearCanvas() {
       const canvas = getCurrentPage().canvas;
       canvas.clear();
@@ -1045,7 +1035,7 @@
       canvas.renderAll();
       saveStateForCurrentPage();
     }
-
+    
     function saveAsImage() {
       const folder = folders[currentFolderId];
       folder.pages.forEach((pageObj, index) => {
@@ -1060,15 +1050,10 @@
         link.click();
       });
     }
-
+    
     function saveAsPDF() {
-      // Extract jsPDF from the jspdf namespace
       const { jsPDF } = window.jspdf;
-      const doc = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       const folder = folders[currentFolderId];
       folder.pages.forEach((pageObj, index) => {
         if (index > 0) doc.addPage();
@@ -1081,45 +1066,31 @@
       });
       doc.save(`folder-${currentFolderId}.pdf`);
     }
-
+    
     function bringForward() {
       const activeObject = getCurrentPage().canvas.getActiveObject();
-      if (activeObject) {
-        activeObject.bringForward();
-        saveStateForCurrentPage();
-      }
+      if (activeObject) { activeObject.bringForward(); saveStateForCurrentPage(); }
     }
-
+    
     function sendBackward() {
       const activeObject = getCurrentPage().canvas.getActiveObject();
-      if (activeObject) {
-        activeObject.sendBackwards();
-        saveStateForCurrentPage();
-      }
+      if (activeObject) { activeObject.sendBackwards(); saveStateForCurrentPage(); }
     }
-
+    
     function deleteSelected() {
       const canvas = getCurrentPage().canvas;
       const activeObject = canvas.getActiveObject();
-      if (activeObject) {
-        canvas.remove(activeObject);
-        saveStateForCurrentPage();
-      }
+      if (activeObject) { canvas.remove(activeObject); saveStateForCurrentPage(); }
     }
-
-    // Toggle file tree visibility without affecting layout
+    
     function toggleFileTree() {
       const fileTree = document.getElementById('fileTree');
-      if (fileTree.style.display === 'none' || fileTree.style.display === '') {
-        fileTree.style.display = 'block';
-      } else {
-        fileTree.style.display = 'none';
-      }
+      fileTree.style.display = (fileTree.style.display === 'none' || fileTree.style.display === '') ? 'block' : 'none';
     }
-
-    // On page load, attempt to load saved data
+    
     window.onload = () => {
       loadFromLocalStorage();
+      document.getElementById('toggleToolbarBtn').style.right = '0';
     };
   </script>
 </body>
